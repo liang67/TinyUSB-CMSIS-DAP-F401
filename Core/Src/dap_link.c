@@ -87,9 +87,16 @@ static volatile bool _uart_tx_busy;
 #error "This port assumes DAP_PACKET_SIZE <= 64 (single FS bulk packet)"
 #endif
 
-static uint8_t  _dap_request[DAP_PACKET_SIZE];
-static uint8_t  _dap_response[DAP_PACKET_SIZE];
-static volatile bool _dap_request_pending;
+/* A single tud_task() drain can dispatch more than one vendor RX completion,
+   so arriving requests are queued instead of overwriting one shared buffer.
+   One slot is always kept free to distinguish full from empty. */
+#define DAP_QUEUE_DEPTH   (DAP_PACKET_COUNT + 1U)
+
+static uint8_t           _dap_req_queue[DAP_QUEUE_DEPTH][DAP_PACKET_SIZE];
+static uint8_t           _dap_response[DAP_PACKET_SIZE];
+static uint16_t          _dap_rsp_len;      /* response still to be written out */
+static volatile uint32_t _dap_req_head;
+static volatile uint32_t _dap_req_tail;
 
 /* -------------------------------------------------------------------------- */
 /* Status LED (PC13, active low, shared by every status indication)           */
@@ -291,22 +298,40 @@ static void bridge_usb_to_uart(void) {
 /* CMSIS-DAP v2 vendor endpoint                                               */
 /* -------------------------------------------------------------------------- */
 
-/* Process one received packet and queue the response. */
+/* Process one queued request and send its response. */
 static void dap_process_packet(void) {
-  if (!_dap_request_pending) {
-    return;
-  }
-  _dap_request_pending = false;
-
-  uint32_t result = DAP_ProcessCommand(_dap_request, _dap_response);
-  uint32_t rsp_len = result & 0xFFFFU;
-
-  if (rsp_len > 0U) {
-    if (rsp_len > sizeof(_dap_response)) {
-      rsp_len = sizeof(_dap_response);
+  /* Flush a response that did not fit into the vendor IN FIFO last time.
+     Commands must never be executed twice (they may move the target),
+     so the pending payload is kept until there is room for it. */
+  if (_dap_rsp_len > 0U) {
+    if (tud_vendor_write_available() < _dap_rsp_len) {
+      return;
     }
-    (void)tud_vendor_write(_dap_response, (uint16_t)rsp_len);
+    (void)tud_vendor_write(_dap_response, (uint16_t)_dap_rsp_len);
     tud_vendor_write_flush();
+    _dap_rsp_len = 0U;
+  }
+
+  if (_dap_req_tail == _dap_req_head) {
+    return;                              /* queue empty */
+  }
+
+  const uint8_t *request = _dap_req_queue[_dap_req_tail];
+  uint32_t result = DAP_ProcessCommand(request, _dap_response);
+
+  /* Release the slot only after the command has been fully executed. */
+  _dap_req_tail = (_dap_req_tail + 1U) % DAP_QUEUE_DEPTH;
+
+  uint32_t rsp_len = result & 0xFFFFU;
+  if (rsp_len > DAP_PACKET_SIZE) {
+    rsp_len = DAP_PACKET_SIZE;
+  }
+  _dap_rsp_len = rsp_len;
+
+  if (_dap_rsp_len > 0U && tud_vendor_write_available() >= _dap_rsp_len) {
+    (void)tud_vendor_write(_dap_response, (uint16_t)_dap_rsp_len);
+    tud_vendor_write_flush();
+    _dap_rsp_len = 0U;
   }
 }
 
@@ -314,12 +339,19 @@ static void dap_process_packet(void) {
 void tud_vendor_rx_cb(uint8_t itf, uint8_t const *buffer, uint16_t bufsize) {
   (void)itf;
 
-  if (bufsize == 0U || bufsize > sizeof(_dap_request)) {
+  if (bufsize == 0U || bufsize > DAP_PACKET_SIZE) {
     return;
   }
 
-  memcpy(_dap_request, buffer, bufsize);
-  _dap_request_pending = true;
+  uint32_t next = (_dap_req_head + 1U) % DAP_QUEUE_DEPTH;
+  if (next == _dap_req_tail) {
+    return;                              /* queue full: drop */
+  }
+
+  memcpy(_dap_req_queue[_dap_req_head], buffer, bufsize);
+  /* DAP_ProcessCommand() may look past the actual payload for padding. */
+  memset(_dap_req_queue[_dap_req_head] + bufsize, 0, DAP_PACKET_SIZE - bufsize);
+  _dap_req_head = next;
 }
 
 /* Vendor interface control requests that are not part of MS OS 2.0. */
@@ -344,7 +376,6 @@ void tud_cdc_line_coding_cb(uint8_t itf, cdc_line_coding_t const *coding) {
 
   huart1.Init.BaudRate = coding->bit_rate;
   switch (coding->stop_bits) {
-    case 0:  huart1.Init.StopBits = UART_STOPBITS_1;   break;
     case 2:  huart1.Init.StopBits = UART_STOPBITS_2;   break;
     default: huart1.Init.StopBits = UART_STOPBITS_1;   break;
   }
@@ -353,8 +384,15 @@ void tud_cdc_line_coding_cb(uint8_t itf, cdc_line_coding_t const *coding) {
     case 2:  huart1.Init.Parity = UART_PARITY_EVEN;    break;
     default: huart1.Init.Parity = UART_PARITY_NONE;    break;
   }
-  huart1.Init.WordLength = (coding->data_bits == 9U) ? UART_WORDLENGTH_9B
-                                                     : UART_WORDLENGTH_8B;
+
+  /* On STM32 the parity bit is included in the frame length, so 8 data bits
+     plus parity needs a 9-bit word length.  9 data bits are not representable
+     without dropping the parity bit, so fall back to 8. */
+  if (huart1.Init.Parity == UART_PARITY_NONE) {
+    huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  } else {
+    huart1.Init.WordLength = UART_WORDLENGTH_9B;
+  }
 
   (void)HAL_UART_DeInit(&huart1);
   (void)HAL_UART_Init(&huart1);
@@ -382,7 +420,9 @@ void dap_link_init(void) {
   fifo_reset(&_usb_to_uart);
   _uart_tx_busy = false;
 
-  _dap_request_pending = false;
+  _dap_req_head = 0U;
+  _dap_req_tail = 0U;
+  _dap_rsp_len = 0U;
 
   /* Initialise the CMSIS-DAP core (also enables the DWT cycle counter). */
   DAP_Setup();

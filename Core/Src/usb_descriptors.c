@@ -83,14 +83,24 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
 /* BOS descriptor (Microsoft OS 2.0 platform capability)             */
 /*------------------------------------------------------------------*/
 
+/* bRequest used by Windows to fetch the MS OS 2.0 descriptor set.  It must
+   match the bMS_VendorCode advertised in the BOS descriptor below. */
+#define VENDOR_REQUEST_MICROSOFT  0x01
+
 #define BOS_TOTAL_LEN  (TUD_BOS_DESC_LEN + TUD_BOS_MICROSOFT_OS_DESC_LEN)
 
 /* Length of the whole MS OS 2.0 descriptor set */
-#define MS_OS_20_DESC_LEN  (10U + 8U + 8U + 20U)   /* 0x2E */
+#define MS_OS_20_DESC_LEN       (10U + 8U + 8U + 20U)   /* 0x2E */
+
+/* Configuration subset = its header + the function subset (header + feature) */
+#define MS_OS_20_CONFIG_SUBSET_LEN  (8U + 8U + 20U)     /* 0x24 */
+
+/* Function subset = its header + the compatible ID feature */
+#define MS_OS_20_FUNC_SUBSET_LEN    (8U + 20U)          /* 0x1C */
 
 uint8_t const desc_bos[] = {
   TUD_BOS_DESCRIPTOR(BOS_TOTAL_LEN, 1),
-  TUD_BOS_MS_OS_20_DESCRIPTOR(MS_OS_20_DESC_LEN, MS_OS_20_DESC_WINDEX)
+  TUD_BOS_MS_OS_20_DESCRIPTOR(MS_OS_20_DESC_LEN, VENDOR_REQUEST_MICROSOFT)
 };
 
 uint8_t const *tud_descriptor_bos_cb(void) {
@@ -117,14 +127,16 @@ uint8_t const desc_ms_os_20[] = {
   0x01, 0x00,                  /* wDescriptorType = SUBSET_HEADER_CONFIGURATION     */
   0x01,                        /* bConfigurationValue                              */
   0x00,                        /* bReserved                                        */
-  0x00, 0x00,                  /* wTotalLength of the remaining configuration subset */
+  (uint8_t)(MS_OS_20_CONFIG_SUBSET_LEN & 0xFF),
+  (uint8_t)(MS_OS_20_CONFIG_SUBSET_LEN >> 8),   /* wTotalLength of this subset      */
 
   /* Function subset header */
   8, 0x00,                     /* wLength                                          */
   0x02, 0x00,                  /* wDescriptorType = SUBSET_HEADER_FUNCTION          */
   ITF_NUM_VENDOR,              /* bFirstInterface                                  */
   0x00,                        /* bReserved                                        */
-  0x00, 0x00,                  /* wSubsetLength (this header + the feature below)   */
+  (uint8_t)(MS_OS_20_FUNC_SUBSET_LEN & 0xFF),
+  (uint8_t)(MS_OS_20_FUNC_SUBSET_LEN >> 8),     /* wSubsetLength of this subset     */
 
   /* Compatible ID feature */
   20, 0x00,                    /* wLength                                          */
@@ -189,24 +201,27 @@ uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
 /* Vendor control requests                                          */
 /*------------------------------------------------------------------*/
 
-/* bRequest used by Windows to fetch the MS OS 2.0 descriptor set */
-#define VENDOR_REQUEST_MICROSOFT  0x01
-
 bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage,
                                 tusb_control_request_t const *request) {
+  /* The DATA/ACK stages of the MS OS 2.0 fetch carry no new information: the
+     payload was already queued by tud_control_xfer(), so simply accept them. */
+  if (stage != CONTROL_STAGE_SETUP) {
+    if (request->bmRequestType_bit.type == TUSB_REQ_TYPE_VENDOR &&
+        request->bRequest == VENDOR_REQUEST_MICROSOFT) {
+      return true;
+    }
+    return dap_vendor_control_xfer(rhport, stage, request);
+  }
+
   /* Only the SETUP stage of the MS OS 2.0 descriptor fetch is answered here;
      every other vendor request is handled by the DAP command layer. */
-  if (stage == CONTROL_STAGE_SETUP &&
-      request->bmRequestType_bit.type == TUSB_REQ_TYPE_VENDOR &&
+  if (request->bmRequestType_bit.type == TUSB_REQ_TYPE_VENDOR &&
       request->bRequest == VENDOR_REQUEST_MICROSOFT &&
       request->wIndex == MS_OS_20_DESC_WINDEX) {
     return tud_control_xfer(rhport, request, (void *)(uintptr_t)desc_ms_os_20,
                             sizeof(desc_ms_os_20));
   }
 
-  /* Not ours: let the DAP layer see the request on the OUT/IN data stages too. */
-  extern bool dap_vendor_control_xfer(uint8_t rhport, uint8_t stage,
-                                      tusb_control_request_t const *request);
   return dap_vendor_control_xfer(rhport, stage, request);
 }
 

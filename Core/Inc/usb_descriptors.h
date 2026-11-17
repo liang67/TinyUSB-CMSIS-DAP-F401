@@ -38,6 +38,11 @@ enum {
 /* Returns the STM32 96-bit unique device ID formatted as 24 hex characters. */
 const char *board_usb_serial_number(void);
 
+/* Vendor control requests that are not part of the MS OS 2.0 descriptor fetch.
+   Implemented by the DAP command layer; returning false stalls the request. */
+bool dap_vendor_control_xfer(uint8_t rhport, uint8_t stage,
+                             tusb_control_request_t const *request);
+
 #ifdef __cplusplus
 }
 #endif
