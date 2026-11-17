@@ -22,6 +22,40 @@
 
 /* USER CODE BEGIN 0 */
 
+/**
+  * @brief  Configure the USB OTG FS pins and clock without touching the
+  *         peripheral itself.
+  *
+  * The STM32 dwc2 port of TinyUSB performs its own core and PHY bring-up and
+  * enables the internal D+ pull-up when the device is connected.  Running
+  * HAL_PCD_Init() as well would fight over the same registers, so only the
+  * GPIO alternate function and the peripheral clock are set up here.
+  */
+void usb_otg_clock_gpio_init(void)
+{
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+
+  /**USB_OTG_FS GPIO Configuration
+  PA11     ------> USB_OTG_FS_DM
+  PA12     ------> USB_OTG_FS_DP
+  */
+  GPIO_InitStruct.Pin = GPIO_PIN_11|GPIO_PIN_12;
+  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
+  GPIO_InitStruct.Alternate = GPIO_AF10_OTG_FS;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+  /* USB_OTG_FS clock enable */
+  __HAL_RCC_USB_OTG_FS_CLK_ENABLE();
+
+  /* USB_OTG_FS interrupt Init */
+  HAL_NVIC_SetPriority(OTG_FS_IRQn, 5, 0);
+  HAL_NVIC_EnableIRQ(OTG_FS_IRQn);
+}
+
 /* USER CODE END 0 */
 
 PCD_HandleTypeDef hpcd_USB_OTG_FS;

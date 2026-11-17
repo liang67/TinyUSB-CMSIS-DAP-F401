@@ -338,9 +338,9 @@
             <v6Rtti>0</v6Rtti>
             <VariousControls>
               <MiscControls></MiscControls>
-              <Define>USE_HAL_DRIVER,STM32F401xC</Define>
+              <Define>USE_HAL_DRIVER,STM32F401xC,CFG_TUSB_MCU=OPT_MCU_STM32F4</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;../Drivers/STM32F4xx_HAL_Driver/Inc;../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32F4xx/Include;../Drivers/CMSIS/Include</IncludePath>
+              <IncludePath>../Core/Inc;../Drivers/STM32F4xx_HAL_Driver/Inc;../Drivers/STM32F4xx_HAL_Driver/Inc/Legacy;../Drivers/CMSIS/Device/ST/STM32F4xx/Include;../Drivers/CMSIS/Include;../Middlewares/Third_Party/tinyusb/src;../Middlewares/Third_Party/cmsis-dap/Include</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -413,6 +413,16 @@
               <FileName>stm32f4xx_hal_msp.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Core/Src/stm32f4xx_hal_msp.c</FilePath>
+            </File>
+            <File>
+              <FileName>dap_link.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Core/Src/dap_link.c</FilePath>
+            </File>
+            <File>
+              <FileName>usb_descriptors.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Core/Src/usb_descriptors.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -523,6 +533,81 @@
               <FileName>system_stm32f4xx.c</FileName>
               <FileType>1</FileType>
               <FilePath>../Core/Src/system_stm32f4xx.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Middlewares/TinyUSB</GroupName>
+          <Files>
+            <File>
+              <FileName>tusb.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Middlewares/Third_Party/tinyusb/src/tusb.c</FilePath>
+            </File>
+            <File>
+              <FileName>tusb_fifo.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Middlewares/Third_Party/tinyusb/src/common/tusb_fifo.c</FilePath>
+            </File>
+            <File>
+              <FileName>usbd.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Middlewares/Third_Party/tinyusb/src/device/usbd.c</FilePath>
+            </File>
+            <File>
+              <FileName>usbd_control.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Middlewares/Third_Party/tinyusb/src/device/usbd_control.c</FilePath>
+            </File>
+            <File>
+              <FileName>dcd_dwc2.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Middlewares/Third_Party/tinyusb/src/portable/synopsys/dwc2/dcd_dwc2.c</FilePath>
+            </File>
+            <File>
+              <FileName>dwc2_common.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Middlewares/Third_Party/tinyusb/src/portable/synopsys/dwc2/dwc2_common.c</FilePath>
+            </File>
+            <File>
+              <FileName>cdc_device.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Middlewares/Third_Party/tinyusb/src/class/cdc/cdc_device.c</FilePath>
+            </File>
+            <File>
+              <FileName>vendor_device.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Middlewares/Third_Party/tinyusb/src/class/vendor/vendor_device.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Middlewares/CMSIS-DAP</GroupName>
+          <Files>
+            <File>
+              <FileName>DAP.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Middlewares/Third_Party/cmsis-dap/Source/DAP.c</FilePath>
+            </File>
+            <File>
+              <FileName>SW_DP.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Middlewares/Third_Party/cmsis-dap/Source/SW_DP.c</FilePath>
+            </File>
+            <File>
+              <FileName>JTAG_DP.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Middlewares/Third_Party/cmsis-dap/Source/JTAG_DP.c</FilePath>
+            </File>
+            <File>
+              <FileName>SWO.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Middlewares/Third_Party/cmsis-dap/Source/SWO.c</FilePath>
+            </File>
+            <File>
+              <FileName>DAP_vendor.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>../Middlewares/Third_Party/cmsis-dap/Source/DAP_vendor.c</FilePath>
             </File>
           </Files>
         </Group>

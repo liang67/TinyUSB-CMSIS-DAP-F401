@@ -26,6 +26,25 @@ MDK-ARM/00-TINYUSB-DAPLINK/
 *.uvoptx
 *.scvd
 
+# Build log produced by the command line build (UV4 -b ... -o build.log)
+MDK-ARM/build.log
+
+# ---------------------------------------------------------------------------
+# Vendored TinyUSB: only src/ is needed to build this project, the rest of the
+# upstream tree (examples, hw board files, docs, tests, CI config) is dead
+# weight.  README/LICENSE/version.yml are kept for provenance.
+# ---------------------------------------------------------------------------
+Middlewares/Third_Party/tinyusb/.git
+Middlewares/Third_Party/tinyusb/.github/
+Middlewares/Third_Party/tinyusb/.circleci/
+Middlewares/Third_Party/tinyusb/.idea/
+Middlewares/Third_Party/tinyusb/docs/
+Middlewares/Third_Party/tinyusb/examples/
+Middlewares/Third_Party/tinyusb/hw/
+Middlewares/Third_Party/tinyusb/lib/
+Middlewares/Third_Party/tinyusb/test/
+Middlewares/Third_Party/tinyusb/tools/
+
 # ---------------------------------------------------------------------------
 # Debug probe logs and settings
 # ---------------------------------------------------------------------------

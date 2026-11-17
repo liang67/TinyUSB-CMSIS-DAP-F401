@@ -42,6 +42,10 @@ void MX_USB_OTG_FS_PCD_Init(void);
 
 /* USER CODE BEGIN Prototypes */
 
+/* Configure PA11/PA12 (AF10) and enable the USB OTG FS clock + interrupt.
+   The peripheral itself is owned by the TinyUSB dwc2 port. */
+void usb_otg_clock_gpio_init(void);
+
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus

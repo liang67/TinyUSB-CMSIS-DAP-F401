@@ -24,7 +24,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "dap_link.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -89,8 +89,17 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART1_UART_Init();
-  MX_USB_OTG_FS_PCD_Init();
   /* USER CODE BEGIN 2 */
+
+  /* The USB OTG FS peripheral is owned by the TinyUSB dwc2 port: it performs
+     its own core/PHY initialisation and enables the D+ internal pull-up, so
+     the CubeMX HAL PCD init (MX_USB_OTG_FS_PCD_Init) is intentionally not
+     called.  PA11/PA12 and the OTG FS clock are still configured, see
+     usb_otg_clock_gpio_init() below. */
+  usb_otg_clock_gpio_init();
+
+  /* Bring up CMSIS-DAP, the USB device stack and the UART bridge. */
+  dap_link_init();
 
   /* USER CODE END 2 */
 
@@ -98,6 +107,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    dap_link_task();
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
