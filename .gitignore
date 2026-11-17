@@ -1,0 +1,58 @@
+# ---------------------------------------------------------------------------
+# Keil MDK-ARM build output (target output folder, see uvprojx OutputDirectory)
+# ---------------------------------------------------------------------------
+MDK-ARM/00-TINYUSB-DAPLINK/
+
+# ---------------------------------------------------------------------------
+# Compiler / linker intermediates (any folder)
+# ---------------------------------------------------------------------------
+*.o
+*.d
+*.crf
+*.dep
+*.axf
+*.lnp
+*.sct
+*.map
+*.lst
+*.iex
+
+# ---------------------------------------------------------------------------
+# Keil user/per-user files (debugger config, breakpoints, window layout)
+# ---------------------------------------------------------------------------
+*.uvguix.*
+*.uvgui.*
+*.uvopt
+*.uvoptx
+*.scvd
+
+# ---------------------------------------------------------------------------
+# Debug probe logs and settings
+# ---------------------------------------------------------------------------
+JLinkLog.txt
+JLinkLog.txt.*
+JLinkSettings.ini
+keil-build-viewer.log
+keil-build-viewer-record.txt
+
+# ---------------------------------------------------------------------------
+# Stray ST-internal git metadata shipped inside the HAL vendor tree
+# (renamed to .git.st-origin so git does not treat Inc/Legacy/ as a submodule)
+# ---------------------------------------------------------------------------
+Drivers/STM32F4xx_HAL_Driver/Inc/Legacy/.git*
+
+# ---------------------------------------------------------------------------
+# Editors / IDEs
+# ---------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*~
+.bak/
+
+# ---------------------------------------------------------------------------
+# OS clutter
+# ---------------------------------------------------------------------------
+Thumbs.db
+desktop.ini
+.DS_Store

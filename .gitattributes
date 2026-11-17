@@ -1,0 +1,24 @@
+# Normalize text files to LF in the repository.
+* text=auto
+
+# Keil / STM32 source files
+*.c      text
+*.h      text
+*.s      text
+*.S      text
+*.ioc    text
+*.uvprojx text
+*.uvoptx  text
+*.mxproject text
+
+# Binary assets must never be converted
+*.bin    binary
+*.hex    binary
+*.axf    binary
+*.elf    binary
+*.lib    binary
+*.a      binary
+*.o      binary
+*.pdf    binary
+*.png    binary
+*.jpg    binary
