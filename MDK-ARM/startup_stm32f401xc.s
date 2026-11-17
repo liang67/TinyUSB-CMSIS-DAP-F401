@@ -29,7 +29,9 @@
 ;   <o> Stack Size (in Bytes) <0x0-0xFFFFFFFF:8>
 ; </h>
 
-Stack_Size		EQU     0x400
+; The TinyUSB device stack plus the HAL UART/USB callbacks need noticeably
+; more than the 1 KB CubeMX default, so the stack is enlarged to 2 KB.
+Stack_Size		EQU     0x800
 
                 AREA    STACK, NOINIT, READWRITE, ALIGN=3
 Stack_Mem       SPACE   Stack_Size
