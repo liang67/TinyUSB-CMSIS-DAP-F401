@@ -25,6 +25,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "dap_link.h"
+#include "DAP_config.h"      /* DAP_BOOT_DEBUG_DELAY_MS */
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -83,6 +84,13 @@ int main(void)
   SystemClock_Config();
 
   /* USER CODE BEGIN SysInit */
+
+  /* PA13/PA14 are this MCU's own SWD debug port.  Delay before MX_GPIO_Init()
+     grabs them for the DAP bit-bang engine, so that a debugger still has a
+     window after every reset to attach and (re)flash the chip. */
+#if (DAP_BOOT_DEBUG_DELAY_MS > 0U)
+  HAL_Delay(DAP_BOOT_DEBUG_DELAY_MS);
+#endif
 
   /* USER CODE END SysInit */
 

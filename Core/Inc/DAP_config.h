@@ -7,8 +7,8 @@
   * Firmware        : CMSIS-DAP v2 over TinyUSB, plus CDC-ACM <-> USART1 bridge
   *
   * Pin usage
-  *   PB13  SWCLK / TCK          (push-pull output, driven by firmware)
-  *   PB14  SWDIO / TMS          (push-pull output <-> input with pull-up)
+  *   PA14  SWCLK / TCK          (push-pull output)
+  *   PA13  SWDIO / TMS          (push-pull output, or input with pull-up)
   *   PB0   nRESET               (open-drain output, low = assert)
   *   PC13  status LED           (active low, shared by all status reports)
   *   PA9   USART1_TX   AF7
@@ -19,6 +19,12 @@
   * This project only implements SWD (no JTAG pins are wired on the board),
   * therefore DAP_JTAG is 0.  DAP_SWJ_Pins() nevertheless references the
   * TDI / TDO / nTRST hooks unconditionally, so benign stubs are provided.
+  *
+  * IMPORTANT - PA13/PA14 are this MCU's own SWD debug port.
+  * The DAP bit-bang engine drives them as GPIOs, which takes the chip's debug
+  * port away from an external probe.  main() therefore waits
+  * DAP_BOOT_DEBUG_DELAY_MS before MX_GPIO_Init() grabs the pins, leaving a
+  * window after every reset in which a debugger can attach and reflash.
   ******************************************************************************
   */
 
@@ -38,6 +44,15 @@ extern "C" {
 
 /** Processor clock frequency [Hz] used by the bit-bang delay calibration. */
 #define CPU_CLOCK               (84000000U)
+
+/** Power-up debug window [ms].
+ *
+ *  PA13/PA14 are the SWD pins of this very MCU, so as soon as the firmware
+ *  configures them as GPIOs an external probe can no longer attach.  main()
+ *  holds off MX_GPIO_Init() for this long after reset, which gives a debugger
+ *  the chance to take over the core and (re)flash the chip.  Set to 0 for
+ *  production builds where the window is not wanted. */
+#define DAP_BOOT_DEBUG_DELAY_MS (2000U)
 
 /** Number of clock cycles the GPIO write macro needs (BSRR write = 2 cycles). */
 #define IO_PORT_WRITE_CYCLES    (2U)
@@ -102,14 +117,13 @@ extern const char *DAP_SerialNumberString(void);
 /* critical, HAL_GPIO_WritePin() would be far too slow)                       */
 /* -------------------------------------------------------------------------- */
 
-#define DAP_SWCLK_PORT          GPIOB
-#define DAP_SWCLK_PIN           GPIO_PIN_13
-#define DAP_SWCLK_PIN_POS       (13U)
+#define DAP_SWCLK_PORT          GPIOA
+#define DAP_SWCLK_PIN           GPIO_PIN_14
+#define DAP_SWCLK_PIN_POS       (14U)
 
-#define DAP_SWDIO_PORT          GPIOB
-#define DAP_SWDIO_PIN           GPIO_PIN_14
-#define DAP_SWDIO_PIN_POS       (14U)
-
+#define DAP_SWDIO_PORT          GPIOA
+#define DAP_SWDIO_PIN           GPIO_PIN_13
+#define DAP_SWDIO_PIN_POS       (13U)
 #define DAP_NRESET_PORT         GPIOB
 #define DAP_NRESET_PIN          GPIO_PIN_0
 #define DAP_NRESET_PIN_POS      (0U)
@@ -186,7 +200,7 @@ __STATIC_INLINE uint8_t DAP_GetProductFirmwareVersionString (char *str) {
 /* Port setup                                                                 */
 /* -------------------------------------------------------------------------- */
 
-/** Switch SWDIO (PB14) to push-pull output. */
+/** Switch SWDIO (PA13) to push-pull output. */
 __STATIC_FORCEINLINE void DAP_SWDIO_OutputMode (void) {
   uint32_t moder = DAP_SWDIO_PORT->MODER;
   moder &= ~(3UL << (DAP_SWDIO_PIN_POS * 2U));
@@ -197,7 +211,7 @@ __STATIC_FORCEINLINE void DAP_SWDIO_OutputMode (void) {
   DAP_SWDIO_PORT->PUPDR &= ~(3UL << (DAP_SWDIO_PIN_POS * 2U)); /* no pull */
 }
 
-/** Switch SWDIO (PB14) to input with pull-up. */
+/** Switch SWDIO (PA13) to input with pull-up. */
 __STATIC_FORCEINLINE void DAP_SWDIO_InputMode (void) {
   uint32_t moder = DAP_SWDIO_PORT->MODER;
   moder &= ~(3UL << (DAP_SWDIO_PIN_POS * 2U));             /* input      */
@@ -216,30 +230,42 @@ __STATIC_INLINE void PORT_SWD_SETUP (void) {
   DAP_SWDIO_PORT->BSRR = DAP_SWDIO_PIN;                    /* SWDIO high */
   DAP_SWCLK_PORT->BSRR = (uint32_t)DAP_SWCLK_PIN << 16U;   /* SWCLK low  */
   DAP_SWDIO_OutputMode();
+
+  /* SWCLK must be driven too, the bit-bang macros only toggle it. */
+  {
+    uint32_t moder = DAP_SWCLK_PORT->MODER;
+    moder &= ~(3UL << (DAP_SWCLK_PIN_POS * 2U));
+    moder |=  (1UL << (DAP_SWCLK_PIN_POS * 2U));           /* output     */
+    DAP_SWCLK_PORT->MODER = moder;
+    DAP_SWCLK_PORT->OTYPER &= ~(1UL << DAP_SWCLK_PIN_POS);
+    DAP_SWCLK_PORT->OSPEEDR |= (3UL << (DAP_SWCLK_PIN_POS * 2U));
+    DAP_SWCLK_PORT->PUPDR  &= ~(3UL << (DAP_SWCLK_PIN_POS * 2U));
+  }
   DAP_NRESET_PORT->BSRR = DAP_NRESET_PIN;                  /* open-drain: release */
 }
 
-/** Release the debug port: both lines become inputs, nRESET released. */
+/** Release the lines when no debug session is active. */
 __STATIC_INLINE void PORT_OFF (void) {
-  DAP_NRESET_PORT->BSRR = DAP_NRESET_PIN;
-  DAP_SWDIO_InputMode();
+  DAP_NRESET_PORT->BSRR = DAP_NRESET_PIN;                  /* release nRESET */
+  DAP_SWCLK_PORT->BSRR = (uint32_t)DAP_SWCLK_PIN << 16U;   /* SWCLK low      */
+  DAP_SWDIO_InputMode();                                   /* SWDIO hi-Z     */
 }
 
 /* -------------------------------------------------------------------------- */
 /* SWCLK / TCK                                                                */
 /* -------------------------------------------------------------------------- */
 
-/** SWCLK (PB13) input. */
+/** SWCLK (PA14) input. */
 __STATIC_FORCEINLINE uint32_t PIN_SWCLK_TCK_IN  (void) {
   return ((DAP_SWCLK_PORT->IDR & DAP_SWCLK_PIN) ? 1U : 0U);
 }
 
-/** SWCLK (PB13) = 1. */
+/** SWCLK (PA14) = 1. */
 __STATIC_FORCEINLINE void PIN_SWCLK_TCK_SET (void) {
   DAP_SWCLK_PORT->BSRR = DAP_SWCLK_PIN;
 }
 
-/** SWCLK (PB13) = 0. */
+/** SWCLK (PA14) = 0. */
 __STATIC_FORCEINLINE void PIN_SWCLK_TCK_CLR (void) {
   DAP_SWCLK_PORT->BSRR = (uint32_t)DAP_SWCLK_PIN << 16U;
 }
@@ -248,27 +274,27 @@ __STATIC_FORCEINLINE void PIN_SWCLK_TCK_CLR (void) {
 /* SWDIO / TMS                                                                */
 /* -------------------------------------------------------------------------- */
 
-/** SWDIO (PB14) input. */
+/** SWDIO (PA13) input. */
 __STATIC_FORCEINLINE uint32_t PIN_SWDIO_TMS_IN (void) {
   return ((DAP_SWDIO_PORT->IDR & DAP_SWDIO_PIN) ? 1U : 0U);
 }
 
-/** SWDIO (PB14) = 1. */
+/** SWDIO (PA13) = 1. */
 __STATIC_FORCEINLINE void PIN_SWDIO_TMS_SET (void) {
   DAP_SWDIO_PORT->BSRR = DAP_SWDIO_PIN;
 }
 
-/** SWDIO (PB14) = 0. */
+/** SWDIO (PA13) = 0. */
 __STATIC_FORCEINLINE void PIN_SWDIO_TMS_CLR (void) {
   DAP_SWDIO_PORT->BSRR = (uint32_t)DAP_SWDIO_PIN << 16U;
 }
 
-/** SWDIO (PB14) input. */
+/** SWDIO (PA13) input. */
 __STATIC_FORCEINLINE uint32_t PIN_SWDIO_IN (void) {
   return ((DAP_SWDIO_PORT->IDR & DAP_SWDIO_PIN) ? 1U : 0U);
 }
 
-/** SWDIO (PB14) = bit. */
+/** SWDIO (PA13) = bit. */
 __STATIC_FORCEINLINE void PIN_SWDIO_OUT (uint32_t bit) {
   if ((bit & 1U) != 0U) {
     DAP_SWDIO_PORT->BSRR = DAP_SWDIO_PIN;
@@ -277,12 +303,12 @@ __STATIC_FORCEINLINE void PIN_SWDIO_OUT (uint32_t bit) {
   }
 }
 
-/** Switch SWDIO (PB14) to output. */
+/** Switch SWDIO (PA13) to output. */
 __STATIC_FORCEINLINE void PIN_SWDIO_OUT_ENABLE (void) {
   DAP_SWDIO_OutputMode();
 }
 
-/** Switch SWDIO (PB14) to input. */
+/** Switch SWDIO (PA13) to input. */
 __STATIC_FORCEINLINE void PIN_SWDIO_OUT_DISABLE (void) {
   DAP_SWDIO_InputMode();
 }

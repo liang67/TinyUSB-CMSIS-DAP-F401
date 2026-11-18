@@ -51,18 +51,22 @@ void MX_GPIO_Init(void)
 
   /* Configure output levels before the pins are switched to output so that
      no glitch is generated on the debug lines. */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, GPIO_PIN_RESET);   /* SWCLK low      */
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, GPIO_PIN_SET);     /* SWDIO high     */
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_14, GPIO_PIN_RESET);   /* SWCLK low       */
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_13, GPIO_PIN_SET);     /* SWDIO high      */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0,  GPIO_PIN_SET);     /* nRESET released */
   HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);     /* LED off (active low) */
 
-  /* PB13 = SWCLK/TCK, PB14 = SWDIO/TMS : push-pull outputs driven by the
-     CMSIS-DAP bit-banging routines (they switch SWDIO direction in software). */
+  /* PA14 = SWCLK/TCK, PA13 = SWDIO/TMS : push-pull outputs driven by the
+     CMSIS-DAP bit-bang engine.  These are the SWD pins of this very MCU, so
+     once they are GPIOs an external probe cannot attach any more; main()
+     therefore waits DAP_BOOT_DEBUG_DELAY_MS before calling this function,
+     which leaves a window at every power-up in which the debugger can still
+     take the chip over and program it. */
   GPIO_InitStruct.Pin   = GPIO_PIN_13 | GPIO_PIN_14;
   GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull  = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* PB0 = nRESET : open-drain output, so that the target reset line can be
      driven low by the debugger while still being released externally.

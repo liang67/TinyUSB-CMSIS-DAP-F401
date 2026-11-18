@@ -453,14 +453,24 @@ void dap_link_task(void) {
   tud_task();
 
   /* USB events may have changed the connection state. */
-  if (tud_mounted()) {
+  static bool was_mounted = false;
+  bool now_mounted = tud_mounted();
+
+  if (now_mounted) {
     if (_led_mode == LED_MODE_OFF) {
       _led_mode = LED_MODE_HEARTBEAT;
       _led_tick = HAL_GetTick();
     }
   } else {
     _led_mode = LED_MODE_OFF;
+
+    /* Probe unplugged: stop driving the SWD lines so the target is left in a
+       sane state and no current flows through a disconnected debug header. */
+    if (was_mounted) {
+      PORT_OFF();
+    }
   }
+  was_mounted = now_mounted;
 
   /* CMSIS-DAP command processing. */
   dap_process_packet();

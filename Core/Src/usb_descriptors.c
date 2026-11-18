@@ -262,7 +262,7 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage,
 /* Serial number from the STM32 96-bit unique ID                    */
 /*------------------------------------------------------------------*/
 
-static char _serial_str[3 + 4 + 24 + 1];   /* prefix + bcdDevice + UID hex + NUL */
+static char _serial_str[3 + 24 + 1];   /* prefix + UID hex + NUL */
 
 const char *board_usb_serial_number(void) {
   static bool ready = false;
@@ -270,25 +270,17 @@ const char *board_usb_serial_number(void) {
   if (!ready) {
     static const char hex[] = "0123456789ABCDEF";
 
-    /* Windows keys a device instance on VID, PID and serial string, and it
-       remembers a failed driver match against that key permanently (the
-       CONFIGFLAG_FAILEDINSTALL flag on the child node).  While bringing this
-       USB interface set up, a stale instance from an earlier firmware kept
-       absorbing enumeration and never got the MS OS 2.0 descriptor applied.
-       Encoding the device release into the serial makes each descriptor
-       revision bind a fresh instance instead of reusing a poisoned one. */
+    /* "L67" + the 96-bit UID: 27 characters, and it never changes for a
+       given chip.  The firmware release lives in bcdDevice, where hosts
+       expect it, so upgrading the firmware does not rename the probe. */
     _serial_str[0] = 'L';
     _serial_str[1] = '6';
     _serial_str[2] = '7';
-    _serial_str[3] = hex[(desc_device.bcdDevice >> 12) & 0x0F];
-    _serial_str[4] = hex[(desc_device.bcdDevice >> 8) & 0x0F];
-    _serial_str[5] = hex[(desc_device.bcdDevice >> 4) & 0x0F];
-    _serial_str[6] = hex[desc_device.bcdDevice & 0x0F];
 
     /* UID is 96 bits at 0x1FFF7A10; byte order chosen so the string is
        stable and unique (not meant to be human readable). */
     const uint32_t *uid = (const uint32_t *)0x1FFF7A10UL;
-    uint32_t idx = 7;
+    uint32_t idx = 3;
 
     for (uint32_t word = 0; word < 3; word++) {
       for (int32_t shift = 24; shift >= 0; shift -= 8) {
