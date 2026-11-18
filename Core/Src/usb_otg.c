@@ -23,6 +23,25 @@
 /* USER CODE BEGIN 0 */
 
 /**
+  * @brief  Disable VBUS sensing on the OTG FS core.
+  *
+  * On the STM32F401 the OTG_FS VBUS sensing input is PA9, which this board
+  * uses as USART1_TX instead.  With sensing enabled the core never sees a
+  * valid B-session (GOTGCTL.BSVLD stays 0), so it stays disconnected and the
+  * host sees no device at all - no bus reset, no enumeration.
+  *
+  * Setting GCCFG.NOVBUSSENS makes the core ignore the VBUS input entirely,
+  * which is exactly what ST's HAL does when vbus_sensing_enable is DISABLE.
+  * This must be re-applied after the TinyUSB dwc2 port has initialised the
+  * core, because the core reset performed there clears GCCFG.
+  */
+void usb_otg_disable_vbus_sensing(void)
+{
+  USB_OTG_FS->GCCFG |= USB_OTG_GCCFG_NOVBUSSENS;
+  USB_OTG_FS->GCCFG &= ~(USB_OTG_GCCFG_VBUSASEN | USB_OTG_GCCFG_VBUSBSEN);
+}
+
+/**
   * @brief  Configure the USB OTG FS pins and clock without touching the
   *         peripheral itself.
   *
@@ -50,6 +69,9 @@ void usb_otg_clock_gpio_init(void)
 
   /* USB_OTG_FS clock enable */
   __HAL_RCC_USB_OTG_FS_CLK_ENABLE();
+
+  /* PA9 doubles as USART1_TX here, so the core must not wait for VBUS. */
+  usb_otg_disable_vbus_sensing();
 
   /* USB_OTG_FS interrupt Init */
   HAL_NVIC_SetPriority(OTG_FS_IRQn, 5, 0);

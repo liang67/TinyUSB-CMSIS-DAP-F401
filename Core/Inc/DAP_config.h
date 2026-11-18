@@ -3,7 +3,7 @@
   * @file    DAP_config.h
   * @brief   CMSIS-DAP board (pin / timing / capability) configuration.
   *
-  * Target hardware : WeAct MiniSTM32F4x1 V3.1 (STM32F401CCU6, 25 MHz HSE)
+  * Target hardware : STM32F401CCU6 board (MiniSTM32F4x1 V3.1 layout, 25 MHz HSE)
   * Firmware        : CMSIS-DAP v2 over TinyUSB, plus CDC-ACM <-> USART1 bridge
   *
   * Pin usage
@@ -93,8 +93,8 @@ extern "C" {
 
 extern const char *DAP_SerialNumberString(void);
 
-#define DAP_VENDOR_NAME         "WeAct"
-#define DAP_PRODUCT_NAME        "WeAct STM32F401CC DAPLink"
+#define DAP_VENDOR_NAME         "Liang67"
+#define DAP_PRODUCT_NAME        "Liang67 STM32F401CC DAPLink"
 #define DAP_PRODUCT_FW_VERSION  "1.0.0"
 
 /* -------------------------------------------------------------------------- */

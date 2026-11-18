@@ -46,6 +46,10 @@ void MX_USB_OTG_FS_PCD_Init(void);
    The peripheral itself is owned by the TinyUSB dwc2 port. */
 void usb_otg_clock_gpio_init(void);
 
+/* Set GCCFG.NOVBUSSENS: PA9 is USART1_TX on this board, not the OTG VBUS
+   sensing input, so the core must not gate the connection on VBUS. */
+void usb_otg_disable_vbus_sensing(void);
+
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus

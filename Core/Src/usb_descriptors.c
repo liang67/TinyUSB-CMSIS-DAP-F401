@@ -33,7 +33,14 @@ tusb_desc_device_t const desc_device = {
 
   .idVendor           = 0x0D28,   /* mbed / DAPLink */
   .idProduct          = 0x0204,   /* CMSIS-DAP v2  */
-  .bcdDevice          = 0x0100,
+
+  /* Windows caches the "this device has no OS descriptor" answer per
+     VID/PID/bcdDevice under HKLM\...\usbflags, and never asks again.  1.0.0
+     got such a negative entry cached on this machine, so the MS OS 2.0
+     descriptor was ignored and the vendor interface stayed driverless
+     (Code 28).  Bumping the device release makes Windows re-enumerate it
+     as a new device and fetch the descriptors again. */
+  .bcdDevice          = 0x0104,
 
   .iManufacturer      = STRID_MANUFACTURER,
   .iProduct           = STRID_PRODUCT,
@@ -90,13 +97,13 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
 #define BOS_TOTAL_LEN  (TUD_BOS_DESC_LEN + TUD_BOS_MICROSOFT_OS_DESC_LEN)
 
 /* Length of the whole MS OS 2.0 descriptor set */
-#define MS_OS_20_DESC_LEN       (10U + 8U + 8U + 20U)   /* 0x2E */
+#define MS_OS_20_DESC_LEN       (10U + 8U + 8U + 20U + 132U)   /* 0xB2 */
 
-/* Configuration subset = its header + the function subset (header + feature) */
-#define MS_OS_20_CONFIG_SUBSET_LEN  (8U + 8U + 20U)     /* 0x24 */
+/* Configuration subset = its header + the function subset */
+#define MS_OS_20_CONFIG_SUBSET_LEN  (8U + 8U + 20U + 132U)     /* 0xA8 */
 
-/* Function subset = its header + the compatible ID feature */
-#define MS_OS_20_FUNC_SUBSET_LEN    (8U + 20U)          /* 0x1C */
+/* Function subset = its header + the features */
+#define MS_OS_20_FUNC_SUBSET_LEN    (8U + 20U + 132U)          /* 0xA0 */
 
 uint8_t const desc_bos[] = {
   TUD_BOS_DESCRIPTOR(BOS_TOTAL_LEN, 1),
@@ -125,7 +132,10 @@ uint8_t const desc_ms_os_20[] = {
   /* Configuration subset header */
   8, 0x00,                     /* wLength                                          */
   0x01, 0x00,                  /* wDescriptorType = SUBSET_HEADER_CONFIGURATION     */
-  0x01,                        /* bConfigurationValue                              */
+  0x00,                        /* bConfigurationValue: 0 selects the first (only)
+                                  configuration. Writing 1 here made Windows
+                                  fetch the set and then discard the compatible
+                                  ID, leaving the vendor interface at Code 28. */
   0x00,                        /* bReserved                                        */
   (uint8_t)(MS_OS_20_CONFIG_SUBSET_LEN & 0xFF),
   (uint8_t)(MS_OS_20_CONFIG_SUBSET_LEN >> 8),   /* wTotalLength of this subset      */
@@ -144,7 +154,30 @@ uint8_t const desc_ms_os_20[] = {
   /* 'W','I','N','U','S','B',0,0 */
   'W', 'I', 'N', 'U', 'S', 'B', 0x00, 0x00,
   /* Sub-compatible ID, unused */
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+
+  /* Registry property feature: DeviceInterfaceGUIDs.
+     Without this Windows binds the generic WinUSB driver but exposes no
+     device interface, which is what kept the vendor interface at Code 28.
+     The payload is UTF-16LE, hence the interleaved 0x00 bytes. */
+  132, 0x00,                   /* wLength                                          */
+  0x04, 0x00,                  /* wDescriptorType = FEATURE_REG_PROPERTY            */
+  0x07, 0x00,                  /* wPropertyDataType = REG_MULTI_SZ                  */
+  42, 0x00,                    /* wPropertyNameLength (21 UTF-16 chars incl NUL)    */
+  'D', 0x00, 'e', 0x00, 'v', 0x00, 'i', 0x00, 'c', 0x00, 'e', 0x00,
+  'I', 0x00, 'n', 0x00, 't', 0x00, 'e', 0x00, 'r', 0x00, 'f', 0x00,
+  'a', 0x00, 'c', 0x00, 'e', 0x00, 'G', 0x00, 'U', 0x00, 'I', 0x00,
+  'D', 0x00, 's', 0x00, 0x00, 0x00,
+  80, 0x00,                    /* wPropertyDataLength                               */
+  /* "{CDB3B5AD-293B-4663-AA36-1AAE46463776}" - the GUID CMSIS-DAP probes use */
+  '{', 0x00, 'C', 0x00, 'D', 0x00, 'B', 0x00, '3', 0x00, 'B', 0x00,
+  '5', 0x00, 'A', 0x00, 'D', 0x00, '-', 0x00,
+  '2', 0x00, '9', 0x00, '3', 0x00, 'B', 0x00, '-', 0x00,
+  '4', 0x00, '6', 0x00, '6', 0x00, '3', 0x00, '-', 0x00,
+  'A', 0x00, 'A', 0x00, '3', 0x00, '6', 0x00, '-', 0x00,
+  '1', 0x00, 'A', 0x00, 'A', 0x00, 'E', 0x00, '4', 0x00, '6', 0x00,
+  '4', 0x00, '6', 0x00, '3', 0x00, '7', 0x00, '7', 0x00, '6', 0x00,
+  '}', 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
 TU_VERIFY_STATIC(sizeof(desc_ms_os_20) == MS_OS_20_DESC_LEN, "Incorrect MS OS 2.0 descriptor length");
@@ -158,8 +191,8 @@ char const *string_desc_arr[] = {
   DAP_VENDOR_NAME,                     /* 1: Manufacturer             */
   DAP_PRODUCT_NAME,                    /* 2: Product                  */
   NULL,                                /* 3: Serial (filled at runtime) */
-  "WeAct CDC-ACM",                     /* 4: CDC interface            */
-  "WeAct CMSIS-DAP v2",                /* 5: Vendor interface         */
+  "Liang67 CDC-ACM",                   /* 4: CDC interface            */
+  "Liang67 CMSIS-DAP v2",              /* 5: Vendor interface         */
 };
 
 static uint16_t _desc_str[33];
@@ -229,17 +262,33 @@ bool tud_vendor_control_xfer_cb(uint8_t rhport, uint8_t stage,
 /* Serial number from the STM32 96-bit unique ID                    */
 /*------------------------------------------------------------------*/
 
-static char _serial_str[25];
+static char _serial_str[3 + 4 + 24 + 1];   /* prefix + bcdDevice + UID hex + NUL */
 
 const char *board_usb_serial_number(void) {
   static bool ready = false;
 
   if (!ready) {
     static const char hex[] = "0123456789ABCDEF";
+
+    /* Windows keys a device instance on VID, PID and serial string, and it
+       remembers a failed driver match against that key permanently (the
+       CONFIGFLAG_FAILEDINSTALL flag on the child node).  While bringing this
+       USB interface set up, a stale instance from an earlier firmware kept
+       absorbing enumeration and never got the MS OS 2.0 descriptor applied.
+       Encoding the device release into the serial makes each descriptor
+       revision bind a fresh instance instead of reusing a poisoned one. */
+    _serial_str[0] = 'L';
+    _serial_str[1] = '6';
+    _serial_str[2] = '7';
+    _serial_str[3] = hex[(desc_device.bcdDevice >> 12) & 0x0F];
+    _serial_str[4] = hex[(desc_device.bcdDevice >> 8) & 0x0F];
+    _serial_str[5] = hex[(desc_device.bcdDevice >> 4) & 0x0F];
+    _serial_str[6] = hex[desc_device.bcdDevice & 0x0F];
+
     /* UID is 96 bits at 0x1FFF7A10; byte order chosen so the string is
        stable and unique (not meant to be human readable). */
     const uint32_t *uid = (const uint32_t *)0x1FFF7A10UL;
-    uint32_t idx = 0;
+    uint32_t idx = 7;
 
     for (uint32_t word = 0; word < 3; word++) {
       for (int32_t shift = 24; shift >= 0; shift -= 8) {

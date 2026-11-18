@@ -19,6 +19,7 @@
 
 #include "main.h"
 #include "usart.h"
+#include "usb_otg.h"
 #include "usb_descriptors.h"
 #include "DAP_config.h"
 #include "DAP.h"
@@ -230,7 +231,11 @@ void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart) {
 
 /* Move data from the USART1 receive buffer into the CDC IN endpoint. */
 static void bridge_uart_to_usb(void) {
-  if (!tud_cdc_connected()) {
+  /* tud_cdc_connected() additionally requires the host to assert DTR, which
+     plain serial terminals often do not do.  Gating on readiness alone means
+     the bridge also works for those, and data is never silently buffered
+     forever waiting for a DTR that never comes. */
+  if (!tud_cdc_ready()) {
     return;
   }
 
@@ -312,6 +317,25 @@ static void dap_process_packet(void) {
     _dap_rsp_len = 0U;
   }
 
+  /* Pull pending OUT data from the TinyUSB vendor stream.
+     The class driver's tud_vendor_rx_cb() hook is a weak reference that the
+     linker discards in this image, so the queue is filled by polling here
+     instead of relying on the callback. */
+  while (tud_vendor_available() > 0U) {
+    uint32_t next = (_dap_req_head + 1U) % DAP_QUEUE_DEPTH;
+    if (next == _dap_req_tail) {
+      break;                             /* queue full: leave data in stream */
+    }
+    uint32_t got = tud_vendor_read(_dap_req_queue[_dap_req_head],
+                                   (uint16_t)DAP_PACKET_SIZE);
+    if (got == 0U) {
+      break;
+    }
+    /* DAP_ProcessCommand() may look past the actual payload for padding. */
+    memset(_dap_req_queue[_dap_req_head] + got, 0, DAP_PACKET_SIZE - got);
+    _dap_req_head = next;
+  }
+
   if (_dap_req_tail == _dap_req_head) {
     return;                              /* queue empty */
   }
@@ -333,25 +357,6 @@ static void dap_process_packet(void) {
     tud_vendor_write_flush();
     _dap_rsp_len = 0U;
   }
-}
-
-/* CMSIS-DAP v2 callback: one USB transfer carries exactly one DAP packet. */
-void tud_vendor_rx_cb(uint8_t itf, uint8_t const *buffer, uint16_t bufsize) {
-  (void)itf;
-
-  if (bufsize == 0U || bufsize > DAP_PACKET_SIZE) {
-    return;
-  }
-
-  uint32_t next = (_dap_req_head + 1U) % DAP_QUEUE_DEPTH;
-  if (next == _dap_req_tail) {
-    return;                              /* queue full: drop */
-  }
-
-  memcpy(_dap_req_queue[_dap_req_head], buffer, bufsize);
-  /* DAP_ProcessCommand() may look past the actual payload for padding. */
-  memset(_dap_req_queue[_dap_req_head] + bufsize, 0, DAP_PACKET_SIZE - bufsize);
-  _dap_req_head = next;
 }
 
 /* Vendor interface control requests that are not part of MS OS 2.0. */
@@ -429,6 +434,11 @@ void dap_link_init(void) {
 
   /* Start the USB device stack. */
   (void)tusb_init();
+
+  /* The dwc2 core reset performed by tusb_init() may clear GCCFG, and PA9 is
+     used as USART1_TX here rather than as the OTG VBUS sensing input.  Apply
+     NOVBUSSENS again so the device really connects afterwards. */
+  usb_otg_disable_vbus_sensing();
 
   /* Start listening on the target UART. */
   uart_start_rx();

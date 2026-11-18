@@ -65,10 +65,12 @@ void MX_GPIO_Init(void)
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
   /* PB0 = nRESET : open-drain output, so that the target reset line can be
-     driven low by the debugger while still being released externally. */
+     driven low by the debugger while still being released externally.
+     The internal pull-up keeps the line deasserted (and readable as 1 in
+     DAP_SWJ_Pins) when no target pull-up is attached. */
   GPIO_InitStruct.Pin   = GPIO_PIN_0;
   GPIO_InitStruct.Mode  = GPIO_MODE_OUTPUT_OD;
-  GPIO_InitStruct.Pull  = GPIO_NOPULL;
+  GPIO_InitStruct.Pull  = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
