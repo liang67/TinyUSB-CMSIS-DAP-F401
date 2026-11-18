@@ -151,11 +151,11 @@ UID 每颗芯片唯一且永不改变，所以**升级固件不会改变探针�
 
 或者直接用 Keil 打开 `MDK-ARM/00-TINYUSB-DAPLINK.uvprojx` 编译。
 
-当前体积（-O1）：
+当前体积（`.uvprojx` 里 `Optim` = 3，AC6 对应 `-O2`）：
 
 ```
-Code=0x2048  RO-data  RAM  8.0 KB / 64 KB  (12.6%)
-FLASH       ER_IROM1      32.2 KB / 256 KB (12.6%)
+RW_IRAM1  0x20000000  size 0x00010000  used 8.0 KB  / 64 KB   (12.6%)
+ER_IROM1  0x08000000  size 0x00040000  used 32.2 KB / 256 KB  (12.6%)
 Stack 0x800 (2 KB), Heap 0x200
 ```
 

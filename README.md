@@ -162,11 +162,11 @@ Requires **Keil MDK-ARM 5** with **Arm Compiler 6** (developed with MDK Plus
 
 Or just open `MDK-ARM/00-TINYUSB-DAPLINK.uvprojx` in Keil.
 
-Current footprint (-O1):
+Current footprint (`Optim` level 3 in the `.uvprojx`, which AC6 maps to `-O2`):
 
 ```
-Code        RW_IRAM1   RAM    8.0 KB / 64 KB  (12.6%)
-FLASH       ER_IROM1          32.2 KB / 256 KB (12.6%)
+RW_IRAM1  0x20000000  size 0x00010000  used 8.0 KB  / 64 KB   (12.6%)
+ER_IROM1  0x08000000  size 0x00040000  used 32.2 KB / 256 KB  (12.6%)
 Stack 0x800 (2 KB), Heap 0x200
 ```
 
