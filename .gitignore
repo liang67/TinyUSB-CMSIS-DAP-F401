@@ -28,6 +28,7 @@ MDK-ARM/00-TINYUSB-DAPLINK/
 
 # Build log produced by the command line build (UV4 -b ... -o build.log)
 MDK-ARM/build.log
+MDK-ARM/*.build_log.htm
 
 # ---------------------------------------------------------------------------
 # Vendored TinyUSB: only src/ is needed to build this project, the rest of the

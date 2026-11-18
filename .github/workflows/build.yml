@@ -1,0 +1,94 @@
+name: build
+
+# The firmware only builds with Keil MDK-ARM + Arm Compiler 6, which are not
+# available on public CI runners.  This workflow therefore does the things that
+# can be checked without a toolchain, so a broken README or a stray binary does
+# not sit unnoticed in the tree.
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  hygiene:
+    name: Repository hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check that no build output is tracked
+        run: |
+          set -e
+          bad=$(git ls-files \
+            | grep -E '(^|/)([^/]+\.(o|d|crf|dep|axf|lnp|sct|map|lst|iex))$' \
+            | grep -v '^Drivers/CMSIS/' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::tracked build artefacts:"
+            echo "$bad"
+            exit 1
+          fi
+          echo "no tracked build artefacts"
+
+      - name: Check that the Keil output folder is not tracked
+        run: |
+          set -e
+          if git ls-files | grep -q '^MDK-ARM/00-TINYUSB-DAPLINK/'; then
+            echo "::error::MDK-ARM output folder is tracked"
+            exit 1
+          fi
+          echo "output folder not tracked"
+
+      - name: Check that every README link target exists
+        run: |
+          set -e
+          fail=0
+          for f in README.md README_zh.md; do
+            [ -f "$f" ] || { echo "::error::$f missing"; fail=1; continue; }
+            # relative links of the form [text](path), ignoring http(s), anchors
+            # and mailto
+            while IFS= read -r target; do
+              case "$target" in
+                http*|'#'*|mailto:*) continue ;;
+              esac
+              target="${target%%#*}"
+              [ -z "$target" ] && continue
+              if [ ! -e "$target" ]; then
+                echo "::error file=$f::$target does not exist"
+                fail=1
+              fi
+            done < <(grep -oE '\]\([^)]+\)' "$f" | sed 's/^](//; s/)$//')
+          done
+          exit $fail
+
+      - name: Vendored libraries are present
+        run: |
+          set -e
+          for p in \
+            Middlewares/Third_Party/tinyusb/src/tusb.c \
+            Middlewares/Third_Party/tinyusb/LICENSE \
+            Middlewares/Third_Party/cmsis-dap/Source/DAP.c \
+            Middlewares/Third_Party/cmsis-dap/Include/DAP.h ; do
+            if [ ! -f "$p" ]; then
+              echo "::error::missing vendored file $p"
+              exit 1
+            fi
+          done
+          echo "vendored sources present"
+
+      - name: Core sources are present
+        run: |
+          set -e
+          for p in \
+            Core/Inc/DAP_config.h Core/Inc/tusb_config.h \
+            Core/Inc/usb_descriptors.h Core/Src/dap_link.c \
+            Core/Src/usb_descriptors.c Core/Src/main.c \
+            MDK-ARM/00-TINYUSB-DAPLINK.uvprojx ; do
+            if [ ! -f "$p" ]; then
+              echo "::error::missing $p"
+              exit 1
+            fi
+          done
+          echo "project sources present"
